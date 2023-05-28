@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -74,10 +73,6 @@ func (a *App) GetTodoItem(w http.ResponseWriter, r *http.Request) {
 	var todoItem TodoItem
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
-	// a.DB.First(&todoItem, todoItemID)
-	// w.Header().Set("Content-Type", "application/json")
-	// json.NewEncoder(w).Encode(todoItem)
-	// With check if item exists
 	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -109,17 +104,6 @@ func (a *App) CreateTodoItem(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"success": false, "error": "Title is empty"}`)
 		return
 	}
-
-	// completed, error := strconv.ParseBool(r.FormValue("completed"))
-	// if error != nil {
-	// 	completed = false
-	// }
-	// log.WithFields(log.Fields{"title": title, "description": description, "completed": completed}).Info("CreateTodoItem")
-	// todoItem := TodoItem{Title: title, Description: description, Completed: completed}
-	// a.DB.Create(&todoItem)
-
-	// io.WriteString(w, `{"success": true}`)
-
 	a.DB.Create(&todoItem)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(todoItem)
@@ -128,36 +112,50 @@ func (a *App) CreateTodoItem(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) UpdateTodoItem(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	title := r.FormValue("title")
-	if title == "" {
-		log.Error("Title is empty")
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"success": false, "error": "Title is empty"}`)
-		return
-	}
-	description := r.FormValue("description")
-	completed, _ := strconv.ParseBool(r.FormValue("completed"))
-	log.WithFields(log.Fields{"title": title, "description": description, "completed": completed}).Info("UpdateTodoItem")
 	var todoItem TodoItem
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
-	a.DB.First(&todoItem, todoItemID)
-	todoItem.Title = title
-	todoItem.Description = description
-	todoItem.Completed = completed
-	a.DB.Save(&todoItem)
-	io.WriteString(w, `{"success": true}`)
+	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"success": false, "error": "Item not found"}`)
+	} else {
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&todoItem)
+		if err != nil {
+			log.Error("Error decoding JSON")
+			log.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"success": false, "error": "Bad arguments"}`)
+			return
+		}
+		defer r.Body.Close()
+		// Check if title is empty
+		if todoItem.Title == "" {
+			log.Error("Title is empty")
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"success": false, "error": "Title is empty"}`)
+			return
+		}
+		a.DB.Save(&todoItem)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(todoItem)
+	}
 }
 
 func (a *App) DeleteTodoItem(w http.ResponseWriter, r *http.Request) {
-	log.Info("DeleteTodoItem")
 	var todoItem TodoItem
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
-	a.DB.First(&todoItem, todoItemID)
-	a.DB.Delete(&todoItem)
-	w.Header().Set("Content-Type", "application/json")
-	io.WriteString(w, `{"success": true}`)
+	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"success": false, "error": "Item not found"}`)
+	} else {
+		a.DB.Delete(&todoItem)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"success": true}`)
+	}
 }
 
 func main() {

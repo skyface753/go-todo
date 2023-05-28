@@ -65,6 +65,53 @@ func TestGetTodoItem(t *testing.T) {
 	checkResponseKeyBool(t, false, m["Completed"].(bool))
 }
 
+func TestGetTodoItems(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/todoitems", nil)
+	response := executeRequest(req, a.Router)
+	checkResponseCode(t, http.StatusOK, response.Code)
+}
+
+// TestUpdateTodoItem tests the /todoitems/{id} endpoint
+func TestUpdateTodoItem(t *testing.T) {
+	payload := []byte(`{"title":"test title updated","description":"test description updated","completed":true}`)
+	req, _ := http.NewRequest("PUT", "/todoitems/1", bytes.NewBuffer(payload))
+	response := executeRequest(req, a.Router)
+	checkResponseCode(t, http.StatusOK, response.Code)
+	var m map[string]interface{}
+	json.Unmarshal(response.Body.Bytes(), &m)
+	checkResponseKeyString(t, "test title updated", m["Title"].(string))
+	checkResponseKeyString(t, "test description updated", m["Description"].(string))
+	checkResponseKeyBool(t, true, m["Completed"].(bool))
+}
+
+// TestUpdateNonExistentTodoItem tests the /todoitems/{id} endpoint
+func TestUpdateNonExistentTodoItem(t *testing.T) {
+	payload := []byte(`{"title":"test title updated","description":"test description updated","completed":true}`)
+	req, _ := http.NewRequest("PUT", "/todoitems/2", bytes.NewBuffer(payload))
+	response := executeRequest(req, a.Router)
+	checkResponseCode(t, http.StatusNotFound, response.Code)
+	var m map[string]string
+	json.Unmarshal(response.Body.Bytes(), &m)
+	checkResponseKeyString(t, "Item not found", m["error"])
+}
+
+// TestDeleteTodoItem tests the /todoitems/{id} endpoint
+func TestDeleteTodoItem(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/todoitems/1", nil)
+	response := executeRequest(req, a.Router)
+	checkResponseCode(t, http.StatusOK, response.Code)
+}
+
+// TestDeleteNonExistentTodoItem tests the /todoitems/{id} endpoint
+func TestDeleteNonExistentTodoItem(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/todoitems/1", nil)
+	response := executeRequest(req, a.Router)
+	checkResponseCode(t, http.StatusNotFound, response.Code)
+	var m map[string]string
+	json.Unmarshal(response.Body.Bytes(), &m)
+	checkResponseKeyString(t, "Item not found", m["error"])
+}
+
 func executeRequest(req *http.Request, router *mux.Router) *httptest.ResponseRecorder {
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
