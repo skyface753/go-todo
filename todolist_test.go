@@ -124,7 +124,9 @@ func checkResponseCode(t *testing.T, expected, actual int) {
 	}
 }
 
-// CheckResponseKey for string and bool
+/*
+ * CheckResponseKey for string and bool
+ */
 func checkResponseKeyString(t *testing.T, expected, actual string) {
 	if expected != actual {
 		t.Errorf("Expected response key %s. Got %s\n", expected, actual)

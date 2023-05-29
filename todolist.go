@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -11,8 +10,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-// var db, err = gorm.Open(postgres.Open("host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable TimeZone=Europe/Berlin"), &gorm.Config{})
 
 type App struct {
 	Router *mux.Router
@@ -55,91 +52,65 @@ type TodoItem struct {
 }
 
 func (a *App) Healthz(w http.ResponseWriter, r *http.Request) {
-	log.Info("API Health is OK")
-	w.Header().Set("Content-Type", "application/json")
-	io.WriteString(w, `{"alive": true}`)
+	respondWithJSON(w, http.StatusOK, map[string]bool{"alive": true})
 }
 
 func (a *App) GetTodoItems(w http.ResponseWriter, r *http.Request) {
-	log.Info("GetTodoItems")
 	var todoItems []TodoItem
 	a.DB.Find(&todoItems)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(todoItems)
+	respondWithJSON(w, http.StatusOK, todoItems)
 }
 
 func (a *App) GetTodoItem(w http.ResponseWriter, r *http.Request) {
-	log.Info("GetTodoItem")
 	var todoItem TodoItem
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
 	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"success": false, "error": "Item not found"}`)
+		respondWithError(w, http.StatusNotFound, "Item not found")
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(todoItem)
+		respondWithJSON(w, http.StatusOK, todoItem)
 	}
-
 }
 
 func (a *App) CreateTodoItem(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	decoder := json.NewDecoder(r.Body)
 	var todoItem TodoItem
 	err := decoder.Decode(&todoItem)
 	if err != nil {
-		log.Error("Error decoding JSON")
-		log.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"success": false, "error": "Bad arguments"}`)
+		respondWithError(w, http.StatusBadRequest, "Bad arguments")
 		return
 	}
 	defer r.Body.Close()
 	// Check if title is empty
 	if todoItem.Title == "" {
-		log.Error("Title is empty")
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"success": false, "error": "Title is empty"}`)
-		return
+		respondWithError(w, http.StatusBadRequest, "Title is empty")
 	}
 	a.DB.Create(&todoItem)
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(todoItem)
+	respondWithJSON(w, http.StatusCreated, todoItem)
 
 }
 
 func (a *App) UpdateTodoItem(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	var todoItem TodoItem
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
 	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"success": false, "error": "Item not found"}`)
+		respondWithError(w, http.StatusNotFound, "Item not found")
 	} else {
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&todoItem)
 		if err != nil {
-			log.Error("Error decoding JSON")
-			log.Error(err)
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, `{"success": false, "error": "Bad arguments"}`)
+			respondWithError(w, http.StatusBadRequest, "Bad arguments")
 			return
 		}
 		defer r.Body.Close()
 		// Check if title is empty
 		if todoItem.Title == "" {
-			log.Error("Title is empty")
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, `{"success": false, "error": "Title is empty"}`)
+			respondWithError(w, http.StatusBadRequest, "Title is empty")
 			return
 		}
 		a.DB.Save(&todoItem)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(todoItem)
+		respondWithJSON(w, http.StatusOK, todoItem)
 	}
 }
 
@@ -148,14 +119,22 @@ func (a *App) DeleteTodoItem(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	todoItemID := vars["id"]
 	if result := a.DB.First(&todoItem, todoItemID); result.Error != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"success": false, "error": "Item not found"}`)
+		respondWithError(w, http.StatusNotFound, "Item not found")
 	} else {
 		a.DB.Delete(&todoItem)
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"success": true}`)
+		respondWithJSON(w, http.StatusOK, map[string]bool{"success": true})
 	}
+}
+
+func respondWithError(w http.ResponseWriter, code int, message string) {
+	respondWithJSON(w, code, map[string]string{"error": message})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
 }
 
 func main() {
